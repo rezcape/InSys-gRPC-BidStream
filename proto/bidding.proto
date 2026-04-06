@@ -1,0 +1,39 @@
+syntax = "proto3";
+package bidding;
+
+service BiddingService {
+  rpc LiveBidding(stream BidRequest) returns (stream BidUpdate);
+  rpc PlaceBid(BidRequest) returns (BidResponse);
+  rpc GetAuctionResult(AuctionResultRequest) returns (AuctionResultResponse);
+}
+
+message BidRequest {
+  string auction_id = 1;
+  string bidder_id = 2;
+  string bidder_name = 3;
+  double amount = 4;
+}
+
+message BidUpdate {
+  string auction_id = 1;
+  string highest_bidder = 2;
+  double highest_amount = 3;
+  int64 timestamp = 4;
+}
+
+message BidResponse {
+  bool success = 1;
+  string message = 2;
+  double current_highest = 3;
+}
+
+message AuctionResultRequest {
+  string auction_id = 1;
+}
+
+message AuctionResultResponse {
+  string auction_id = 1;
+  string winner = 2;
+  double final_price = 3;
+  bool auction_closed = 4;
+}

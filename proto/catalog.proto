@@ -1,0 +1,43 @@
+syntax = "proto3";
+package catalog;
+
+service CatalogService {
+  rpc GetItems(GetItemsRequest) returns (GetItemsResponse);
+  rpc OpenAuction(OpenAuctionRequest) returns (OpenAuctionResponse);
+  rpc MonitorAuctionFeed(MonitorRequest) returns (stream AuctionEvent);
+}
+
+message GetItemsRequest {}
+
+message Item {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double starting_price = 4;
+}
+
+message GetItemsResponse {
+  repeated Item items = 1;
+}
+
+message OpenAuctionRequest {
+  string item_id = 1;
+  int32 duration_seconds = 2;
+}
+
+message OpenAuctionResponse {
+  bool success = 1;
+  string auction_id = 2;
+  string message = 3;
+}
+
+message MonitorRequest {}
+
+message AuctionEvent {
+  string auction_id = 1;
+  string item_id = 2;
+  string item_name = 3;
+  double starting_price = 4;
+  int32 duration_seconds = 5;
+  string event_type = 6;
+}

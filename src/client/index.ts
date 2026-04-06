@@ -51,8 +51,22 @@ async function main() {
   );
 
   if (!AUCTION_ID) {
+    if (BIDDER_NAME.toLowerCase() === 'admin' && itemsRes?.items?.length > 0) {
+      const selected = itemsRes.items[0];
+      const openAuctionRes = await new Promise<any>((res, rej) =>
+        catalogClient.OpenAuction(
+          { item_id: selected.id, duration_seconds: 60 },
+          (err: any, r: any) => (err ? rej(err) : res(r))
+        )
+      );
+
+      console.log(`\n[Catalog] Opened auction ${openAuctionRes.auction_id} for ${selected.name}`);
+      console.log(`[Catalog] Share AUCTION=${openAuctionRes.auction_id} to other bidders`);
+      return;
+    }
+
     console.log('\n💡 Tip: Set AUCTION=<auction_id> env var to join a live auction');
-    console.log('💡 Run admin to open an auction first: BIDDER=Admin ts-node src/client/index.ts');
+    console.log('💡 Run admin to open an auction first: BIDDER=Admin npm run client');
     return;
   }
 
@@ -67,7 +81,11 @@ async function main() {
   stream.on('error', (err: any) => console.error('[Stream Error]', err.message));
 
   // Simulate bidding every 3 seconds
-  let bidAmount = 10000000;
+  const maxStartingPrice = Math.max(
+    ...(itemsRes?.items ?? []).map((item: any) => Number(item.starting_price) || 0),
+    10000000
+  );
+  let bidAmount = maxStartingPrice;
   const interval = setInterval(() => {
     bidAmount += Math.floor(Math.random() * 5000000) + 1000000;
     console.log(`[Bidding] ${BIDDER_NAME} bidding Rp${bidAmount.toLocaleString()}...`);

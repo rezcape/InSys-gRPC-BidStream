@@ -2,10 +2,10 @@
   "name": "bidstream",
   "version": "1.0.0",
   "scripts": {
-    "auth": "ts-node src/auth-service/server.ts",
-    "catalog": "ts-node src/catalog-service/server.ts",
-    "bidding": "ts-node src/bidding-service/server.ts",
-    "client": "ts-node src/client/index.ts",
+    "auth": "node node_modules/ts-node/dist/bin.js src/auth-service/server.ts",
+    "catalog": "node node_modules/ts-node/dist/bin.js src/catalog-service/server.ts",
+    "bidding": "node node_modules/ts-node/dist/bin.js src/bidding-service/server.ts",
+    "client": "node node_modules/ts-node/dist/bin.js src/client/index.ts",
     "proto:gen": "proto-loader-gen-types --longs=String --enums=String --defaults --oneofs --grpcLib=@grpc/grpc-js --outDir=src/shared/proto/ proto/*.proto"
   },
   "dependencies": {

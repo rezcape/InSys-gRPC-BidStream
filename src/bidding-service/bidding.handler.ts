@@ -1,5 +1,5 @@
 import * as grpc from '@grpc/grpc-js';
-import { placeBid, getCurrentBid, initAuction } from './state/bid.state';
+import { placeBid, getCurrentBid, initAuction, closeAuction } from './state/bid.state';
 import { subscribe, unsubscribe, broadcast } from './state/broadcaster';
 import { verifyToken } from '../shared/utils/jwt.utils';
 
@@ -330,6 +330,32 @@ export const biddingHandlers = {
         message: `Failed to create auction: ${err.message}`,
       });
     }
+  },
+
+  // Unary — close auction room (called by Catalog Service)
+  CloseAuctionRoom: (call: any, callback: any) => {
+    const { auction_id } = call.request;
+
+    if (!auction_id) {
+      return callback({
+        code: grpc.status.INVALID_ARGUMENT,
+        message: 'auction_id is required',
+      });
+    }
+
+    const state = getCurrentBid(auction_id);
+    if (!state) {
+      return callback({
+        code: grpc.status.NOT_FOUND,
+        message: `Auction ${auction_id} not found`,
+      });
+    }
+
+    closeAuction(auction_id);
+    callback(null, {
+      success: true,
+      message: 'Auction room closed successfully',
+    });
   },
 };
 

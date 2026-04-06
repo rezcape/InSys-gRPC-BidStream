@@ -1,6 +1,22 @@
 import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
 import { v4 as uuidv4 } from 'uuid';
-import { AuctionRoom } from '../shared/types';
+import path from 'path';
+import { AuctionRoom, BIDDING_SERVICE_PORT } from '../shared/types';
+
+const BIDDING_PROTO_PATH = path.join(__dirname, '../../proto/bidding.proto');
+const biddingPackageDef = protoLoader.loadSync(BIDDING_PROTO_PATH, {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true,
+});
+const biddingProto = grpc.loadPackageDefinition(biddingPackageDef) as any;
+const biddingClient = new biddingProto.bidding.BiddingService(
+  `localhost:${BIDDING_SERVICE_PORT}`,
+  grpc.credentials.createInsecure()
+);
 
 // In-memory item database (seed data)
 const itemDatabase = new Map([
@@ -45,6 +61,16 @@ export const catalogHandlers = {
     };
 
     auctionRooms.set(auctionId, room);
+
+    biddingClient.CreateAuctionRoom(
+      { auction_id: auctionId, starting_price: room.startingPrice },
+      (err: any) => {
+        if (err) {
+          console.error(`[Catalog] Failed to initialize bidding room for ${auctionId}: ${err.message}`);
+        }
+      }
+    );
+
     console.log(`[Catalog] Auction opened: ${auctionId} for ${item.name}`);
 
     // Broadcast to all feed subscribers
@@ -65,6 +91,13 @@ export const catalogHandlers = {
     setTimeout(() => {
       room.isOpen = false;
       console.log(`[Catalog] Auction closed: ${auctionId}`);
+
+      biddingClient.CloseAuctionRoom({ auction_id: auctionId }, (err: any) => {
+        if (err) {
+          console.error(`[Catalog] Failed to close bidding room for ${auctionId}: ${err.message}`);
+        }
+      });
+
       feedSubscribers.forEach((sub) => {
         try { sub.write({ ...event, event_type: 'AUCTION_CLOSED' }); } catch {}
       });

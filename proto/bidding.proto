@@ -8,6 +8,7 @@ service BiddingService {
   rpc PlaceBid(BidRequest) returns (BidResponse);
   rpc GetAuctionResult(AuctionResultRequest) returns (AuctionResultResponse);
   rpc CreateAuctionRoom(CreateAuctionRoomRequest) returns (CreateAuctionRoomResponse);
+  rpc CloseAuctionRoom(CloseAuctionRoomRequest) returns (CloseAuctionRoomResponse);
 }
 
 message BidRequest {
@@ -52,6 +53,15 @@ message CreateAuctionRoomRequest {
 }
 
 message CreateAuctionRoomResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CloseAuctionRoomRequest {
+  string auction_id = 1;
+}
+
+message CloseAuctionRoomResponse {
   bool success = 1;
   string message = 2;
 }

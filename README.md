@@ -1,5 +1,11 @@
 # BidStream - Live Auction System (gRPC + Node.js + TypeScript)
 
+## Arsitektur Service
+
+| Nama | NRP |
+|------|-----|
+| Ahmad Syauqi Reza | 50272410
+| Muhammad Khosyi Syehab | 5027241089 |
 
 ## Arsitektur Service
 
@@ -44,15 +50,12 @@ Jalankan 3 service terlebih dahulu (3 terminal berbeda):
 
 ```bash
 # Terminal 1
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 npm run auth
 
 # Terminal 2
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 npm run catalog
 
 # Terminal 3
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 npm run bidding
 ```
 
@@ -61,7 +64,6 @@ npm run bidding
 1. Admin membuka auction:
 
 ```bash
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 BIDDER=Admin npm run client
 ```
 
@@ -70,19 +72,16 @@ Ambil nilai `AUCTION=<auction_id>` dari output.
 2. Jalankan bidder A dan B di terminal berbeda:
 
 ```bash
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 BIDDER=Alice AUCTION=<auction_id> npm run client
 ```
 
 ```bash
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 BIDDER=Budi AUCTION=<auction_id> npm run client
 ```
 
 3. Cek hasil akhir auction:
 
 ```bash
-cd /home/khosy/playground/insys/InSys-gRPC-BidStream
 node - <<'NODE'
 const grpc=require('@grpc/grpc-js');
 const loader=require('@grpc/proto-loader');
@@ -112,11 +111,11 @@ src/
 
 ## Dokumentasi Gambar (Isi Saat Final)
 
-1. [Masukkan Gambar 1 - Diagram arsitektur 3 service]
-2. [Masukkan Gambar 2 - Terminal saat service auth/catalog/bidding running]
-3. [Masukkan Gambar 3 - Admin membuka auction dan mendapatkan auction_id]
-4. [Masukkan Gambar 4 - Multi-client bidding realtime (Alice & Budi)]
-5. [Masukkan Gambar 5 - Hasil akhir GetAuctionResult]
+1. [ Gambar 1 - Diagram arsitektur 3 service]
+2. [ Gambar 2 - Terminal saat service auth/catalog/bidding running]
+3. [ Gambar 3 - Admin membuka auction dan mendapatkan auction_id]
+4. [ Gambar 4 - Multi-client bidding realtime (Alice & Budi)]
+5. [ Gambar 5 - Hasil akhir GetAuctionResult]
 
 ## Catatan Singkat Presentasi
 

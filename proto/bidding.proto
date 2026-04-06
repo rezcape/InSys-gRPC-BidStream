@@ -5,6 +5,7 @@ service BiddingService {
   rpc LiveBidding(stream BidRequest) returns (stream BidUpdate);
   rpc PlaceBid(BidRequest) returns (BidResponse);
   rpc GetAuctionResult(AuctionResultRequest) returns (AuctionResultResponse);
+  rpc CreateAuctionRoom(CreateAuctionRoomRequest) returns (CreateAuctionRoomResponse);
 }
 
 message BidRequest {
@@ -12,6 +13,7 @@ message BidRequest {
   string bidder_id = 2;
   string bidder_name = 3;
   double amount = 4;
+  string token = 5;
 }
 
 message BidUpdate {
@@ -36,4 +38,14 @@ message AuctionResultResponse {
   string winner = 2;
   double final_price = 3;
   bool auction_closed = 4;
+}
+
+message CreateAuctionRoomRequest {
+  string auction_id = 1;
+  double starting_price = 2;
+}
+
+message CreateAuctionRoomResponse {
+  bool success = 1;
+  string message = 2;
 }

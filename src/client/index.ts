@@ -71,7 +71,12 @@ async function main() {
   const interval = setInterval(() => {
     bidAmount += Math.floor(Math.random() * 5000000) + 1000000;
     console.log(`[Bidding] ${BIDDER_NAME} bidding Rp${bidAmount.toLocaleString()}...`);
-    stream.write({ auction_id: AUCTION_ID, bidder_name: BIDDER_NAME, amount: bidAmount });
+    stream.write({ 
+      auction_id: AUCTION_ID, 
+      bidder_name: BIDDER_NAME, 
+      amount: bidAmount,
+      token: loginRes.token
+    });
   }, 3000);
 
   setTimeout(() => {

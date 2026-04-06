@@ -1,22 +1,13 @@
 # BidStream - Live Auction System (gRPC + Node.js + TypeScript)
 
-Setiap kelompok membangun sebuah implementasi sistem komunikasi antar-layanan (Client-Server) menggunakan protokol gRPC.
-
-Contoh topik: Chat System, System Monitoring Dashboard, Real-Time Quiz System, Food Delivery Tracking, IoT Smart Home Simulator, Smart Parking Management System.
-
-Topik tersebut hanya contoh. Bebas gunakan AI, implementasi semakin kreatif dan kompleks maka nilai semakin baik.
-
-Durasi 2 minggu. Minggu ke 5 presentasi projek. Minggu ke 6 demo akhir projek.
-
-Project ini mengangkat topik **real-time auction** dengan 3 service: Auth, Catalog, dan Bidding Engine.
 
 ## Arsitektur Service
 
-| Service | Port | Fungsi |
-|---------|------|--------|
-| Auth Service | 50051 | Register, Login, Validate Token |
-| Catalog Service | 50052 | GetItems, OpenAuction, MonitorAuctionFeed |
-| Bidding Service | 50053 | LiveBidding, StreamBids, SendUpdate, Result |
+| Service | Port | Type | Fungsi |
+|---------|------|------|--------|
+| Auth Service | 50051 | Unary | Register, Login, Validate Token |
+| Catalog Service | 50052 | Unary + Server Streaming | GetItems, OpenAuction, MonitorAuctionFeed |
+| Bidding Service | 50053 | Bidirectional Streaming | LiveBidding, StreamBids, SendUpdate, Result |
 
 ## Fitur Wajib
 

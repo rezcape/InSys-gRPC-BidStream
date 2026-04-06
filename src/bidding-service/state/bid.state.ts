@@ -6,6 +6,15 @@ const mutexMap = new Map<string, Mutex>();
 const bidStateMap = new Map<string, BidState>();
 const auctionStatusMap = new Map<string, boolean>(); // Track auction open/closed status
 
+export type BidFailureReason = 'NOT_FOUND' | 'FAILED_PRECONDITION';
+
+export interface BidResult {
+  success: boolean;
+  message: string;
+  currentHighest: number;
+  reason?: BidFailureReason;
+}
+
 function getMutex(auctionId: string): Mutex {
   if (!mutexMap.has(auctionId)) {
     mutexMap.set(auctionId, new Mutex());
@@ -17,8 +26,18 @@ export async function placeBid(
   auctionId: string,
   bidderName: string,
   amount: number
-): Promise<{ success: boolean; message: string; currentHighest: number }> {
+): Promise<BidResult> {
   const mutex = getMutex(auctionId);
+
+  // Ensure auction room exists
+  if (!bidStateMap.has(auctionId)) {
+    return {
+      success: false,
+      message: `Auction ${auctionId} not found`,
+      currentHighest: 0,
+      reason: 'NOT_FOUND',
+    };
+  }
 
   // Check if auction is open
   const isOpen = auctionStatusMap.get(auctionId);
@@ -28,6 +47,7 @@ export async function placeBid(
       success: false,
       message: `Auction ${auctionId} is closed`,
       currentHighest: current?.highestAmount ?? 0,
+      reason: 'FAILED_PRECONDITION',
     };
   }
 
@@ -35,6 +55,17 @@ export async function placeBid(
   const release = await mutex.acquire();
 
   try {
+    // Re-check status after lock in case auction closed while waiting for mutex
+    if (auctionStatusMap.get(auctionId) === false) {
+      const current = bidStateMap.get(auctionId);
+      return {
+        success: false,
+        message: `Auction ${auctionId} is closed`,
+        currentHighest: current?.highestAmount ?? 0,
+        reason: 'FAILED_PRECONDITION',
+      };
+    }
+
     const current = bidStateMap.get(auctionId);
     const currentHighest = current?.highestAmount ?? 0;
 
@@ -43,6 +74,7 @@ export async function placeBid(
         success: false,
         message: `Bid too low. Current highest: ${currentHighest}`,
         currentHighest,
+        reason: 'FAILED_PRECONDITION',
       };
     }
 

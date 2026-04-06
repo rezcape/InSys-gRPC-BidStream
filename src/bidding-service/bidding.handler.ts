@@ -3,6 +3,32 @@ import { placeBid, getCurrentBid, initAuction } from './state/bid.state';
 import { subscribe, unsubscribe, broadcast } from './state/broadcaster';
 import { verifyToken } from '../shared/utils/jwt.utils';
 
+const BID_TIMEOUT_MS = 10;
+
+function grpcCodeFromFailure(reason?: string): grpc.status {
+  if (reason === 'NOT_FOUND') return grpc.status.NOT_FOUND;
+  if (reason === 'FAILED_PRECONDITION') return grpc.status.FAILED_PRECONDITION;
+  return grpc.status.UNKNOWN;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('BID_TIMEOUT'));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 export const biddingHandlers = {
   // Bidirectional Streaming — jantung sistem
   LiveBidding: (call: grpc.ServerDuplexStream<any, any>) => {
@@ -36,7 +62,21 @@ export const biddingHandlers = {
         subscribe(auction_id, call);
       }
 
-      const result = await placeBid(auction_id, bidder_name, amount);
+      let result;
+      try {
+        result = await withTimeout(placeBid(auction_id, bidder_name, amount), BID_TIMEOUT_MS);
+      } catch (err: any) {
+        if (err?.message === 'BID_TIMEOUT') {
+          call.write({
+            auction_id,
+            highest_bidder: '',
+            highest_amount: 0,
+            timestamp: Date.now(),
+          });
+          return;
+        }
+        throw err;
+      }
 
       if (result.success) {
         const state = getCurrentBid(auction_id);
@@ -63,6 +103,128 @@ export const biddingHandlers = {
 
     call.on('error', () => {
       if (currentAuctionId) unsubscribe(currentAuctionId, call);
+    });
+  },
+
+  // Client streaming — receive continuous bid flow and respond once stream ends
+  StreamBids: (call: grpc.ServerReadableStream<any, any>, callback: any) => {
+    let finalResponse = {
+      success: true,
+      message: 'Bids processed',
+      current_highest: 0,
+    };
+
+    let firstError: { code: grpc.status; message: string } | null = null;
+
+    call.on('data', async (bidRequest: any) => {
+      const { auction_id, bidder_name, amount, token } = bidRequest;
+
+      if (firstError) return;
+
+      if (!auction_id || !bidder_name || !amount || !token) {
+        firstError = {
+          code: grpc.status.INVALID_ARGUMENT,
+          message: 'auction_id, bidder_name, amount, and token are required',
+        };
+        return;
+      }
+
+      try {
+        const payload = verifyToken(token);
+        if (payload.username !== bidder_name) {
+          firstError = {
+            code: grpc.status.UNAUTHENTICATED,
+            message: 'Token bidder_name mismatch',
+          };
+          return;
+        }
+      } catch (err: any) {
+        firstError = {
+          code: grpc.status.UNAUTHENTICATED,
+          message: `Invalid token: ${err.message}`,
+        };
+        return;
+      }
+
+      try {
+        const result = await withTimeout(placeBid(auction_id, bidder_name, amount), BID_TIMEOUT_MS);
+        finalResponse = {
+          success: result.success,
+          message: result.message,
+          current_highest: result.currentHighest,
+        };
+
+        if (!result.success) {
+          firstError = {
+            code: grpcCodeFromFailure(result.reason),
+            message: result.message,
+          };
+          return;
+        }
+
+        const state = getCurrentBid(auction_id);
+        if (state) broadcast(state);
+      } catch (err: any) {
+        if (err?.message === 'BID_TIMEOUT') {
+          firstError = {
+            code: grpc.status.DEADLINE_EXCEEDED,
+            message: 'Bid processing exceeded 10ms deadline',
+          };
+          return;
+        }
+
+        firstError = {
+          code: grpc.status.INTERNAL,
+          message: `Bid processing failed: ${err?.message ?? 'unknown error'}`,
+        };
+      }
+    });
+
+    call.on('end', () => {
+      if (firstError) {
+        return callback(firstError);
+      }
+      callback(null, finalResponse);
+    });
+
+    call.on('error', (err: any) => {
+      callback({
+        code: grpc.status.INTERNAL,
+        message: `StreamBids stream error: ${err?.message ?? 'unknown error'}`,
+      });
+    });
+  },
+
+  // Server streaming — subscribers only receive updates for the chosen auction
+  SendUpdate: (call: grpc.ServerWritableStream<any, any>) => {
+    const { auction_id } = call.request;
+
+    if (!auction_id) {
+      call.emit('error', {
+        code: grpc.status.INVALID_ARGUMENT,
+        message: 'auction_id is required',
+      });
+      return;
+    }
+
+    subscribe(auction_id, call);
+
+    const current = getCurrentBid(auction_id);
+    if (current) {
+      call.write({
+        auction_id: current.auctionId,
+        highest_bidder: current.highestBidder,
+        highest_amount: current.highestAmount,
+        timestamp: current.timestamp,
+      });
+    }
+
+    call.on('cancelled', () => {
+      unsubscribe(auction_id, call);
+    });
+
+    call.on('error', () => {
+      unsubscribe(auction_id, call);
     });
   },
 
@@ -93,7 +255,30 @@ export const biddingHandlers = {
       });
     }
 
-    const result = await placeBid(auction_id, bidder_name, amount);
+    let result;
+    try {
+      result = await withTimeout(placeBid(auction_id, bidder_name, amount), BID_TIMEOUT_MS);
+    } catch (err: any) {
+      if (err?.message === 'BID_TIMEOUT') {
+        return callback({
+          code: grpc.status.DEADLINE_EXCEEDED,
+          message: 'Bid processing exceeded 10ms deadline',
+        });
+      }
+
+      return callback({
+        code: grpc.status.INTERNAL,
+        message: `Bid processing failed: ${err?.message ?? 'unknown error'}`,
+      });
+    }
+
+    if (!result.success) {
+      return callback({
+        code: grpcCodeFromFailure(result.reason),
+        message: result.message,
+      });
+    }
+
     callback(null, {
       success: result.success,
       message: result.message,

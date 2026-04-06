@@ -1,10 +1,12 @@
 import * as grpc from '@grpc/grpc-js';
 import { BidState } from '../../shared/types';
 
-// Map of auctionId -> list of connected streaming clients
-const subscribers = new Map<string, grpc.ServerDuplexStream<any, any>[]>();
+type SubscriberStream = grpc.ServerDuplexStream<any, any> | grpc.ServerWritableStream<any, any>;
 
-export function subscribe(auctionId: string, stream: grpc.ServerDuplexStream<any, any>): void {
+// Map of auctionId -> list of connected streaming clients
+const subscribers = new Map<string, SubscriberStream[]>();
+
+export function subscribe(auctionId: string, stream: SubscriberStream): void {
   if (!subscribers.has(auctionId)) {
     subscribers.set(auctionId, []);
   }
@@ -12,7 +14,7 @@ export function subscribe(auctionId: string, stream: grpc.ServerDuplexStream<any
   console.log(`[Broadcaster] Client joined auction ${auctionId}. Total: ${subscribers.get(auctionId)!.length}`);
 }
 
-export function unsubscribe(auctionId: string, stream: grpc.ServerDuplexStream<any, any>): void {
+export function unsubscribe(auctionId: string, stream: SubscriberStream): void {
   const subs = subscribers.get(auctionId);
   if (!subs) return;
   const idx = subs.indexOf(stream);

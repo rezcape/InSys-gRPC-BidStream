@@ -22,13 +22,15 @@ export function unsubscribe(auctionId: string, stream: SubscriberStream): void {
   console.log(`[Broadcaster] Client left auction ${auctionId}. Total: ${subs.length}`);
 }
 
-export function broadcast(state: BidState): void {
+export function broadcast(state: BidState, remainingSeconds: number, eventType: string = 'BID_UPDATE'): void {
   const subs = subscribers.get(state.auctionId) ?? [];
   const update = {
     auction_id: state.auctionId,
     highest_bidder: state.highestBidder,
     highest_amount: state.highestAmount,
     timestamp: state.timestamp,
+    remaining_seconds: remainingSeconds,
+    event_type: eventType,
   };
 
   subs.forEach((stream) => {

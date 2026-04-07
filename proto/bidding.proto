@@ -24,6 +24,8 @@ message BidUpdate {
   string highest_bidder = 2;
   double highest_amount = 3;
   int64 timestamp = 4;
+  int32 remaining_seconds = 5;
+  string event_type = 6;
 }
 
 message BidResponse {
@@ -50,6 +52,7 @@ message AuctionResultResponse {
 message CreateAuctionRoomRequest {
   string auction_id = 1;
   double starting_price = 2;
+  int32 duration_seconds = 3;
 }
 
 message CreateAuctionRoomResponse {

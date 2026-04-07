@@ -1,9 +1,39 @@
 import * as grpc from '@grpc/grpc-js';
-import { placeBid, getCurrentBid, initAuction, closeAuction } from './state/bid.state';
+import { placeBid, getCurrentBid, initAuction, closeAuction, getRemainingSeconds } from './state/bid.state';
 import { subscribe, unsubscribe, broadcast } from './state/broadcaster';
 import { verifyToken } from '../shared/utils/jwt.utils';
 
 const BID_TIMEOUT_MS = 10;
+const auctionTickerMap = new Map<string, NodeJS.Timeout>();
+
+function startAuctionTicker(auctionId: string): void {
+  if (auctionTickerMap.has(auctionId)) {
+    clearInterval(auctionTickerMap.get(auctionId)!);
+  }
+
+  const ticker = setInterval(() => {
+    const state = getCurrentBid(auctionId);
+    if (!state) {
+      clearInterval(ticker);
+      auctionTickerMap.delete(auctionId);
+      return;
+    }
+
+    const remaining = getRemainingSeconds(auctionId);
+
+    if (remaining <= 0) {
+      closeAuction(auctionId);
+      broadcast(state, 0, 'AUCTION_CLOSED');
+      clearInterval(ticker);
+      auctionTickerMap.delete(auctionId);
+      return;
+    }
+
+    broadcast(state, remaining, 'TIMER_TICK');
+  }, 1000);
+
+  auctionTickerMap.set(auctionId, ticker);
+}
 
 function grpcCodeFromFailure(reason?: string): grpc.status {
   if (reason === 'NOT_FOUND') return grpc.status.NOT_FOUND;
@@ -80,7 +110,7 @@ export const biddingHandlers = {
 
       if (result.success) {
         const state = getCurrentBid(auction_id);
-        if (state) broadcast(state); // Push update to all connected clients
+        if (state) broadcast(state, getRemainingSeconds(auction_id), 'BID_UPDATE'); // Push update to all connected clients
       } else {
         // Notify only this client their bid was rejected
         call.write({
@@ -88,6 +118,8 @@ export const biddingHandlers = {
           highest_bidder: '',
           highest_amount: result.currentHighest,
           timestamp: Date.now(),
+          remaining_seconds: getRemainingSeconds(auction_id),
+          event_type: 'BID_REJECTED',
         });
       }
     });
@@ -163,7 +195,7 @@ export const biddingHandlers = {
         }
 
         const state = getCurrentBid(auction_id);
-        if (state) broadcast(state);
+        if (state) broadcast(state, getRemainingSeconds(auction_id), 'BID_UPDATE');
       } catch (err: any) {
         if (err?.message === 'BID_TIMEOUT') {
           firstError = {
@@ -216,6 +248,8 @@ export const biddingHandlers = {
         highest_bidder: current.highestBidder,
         highest_amount: current.highestAmount,
         timestamp: current.timestamp,
+        remaining_seconds: getRemainingSeconds(auction_id),
+        event_type: 'SNAPSHOT',
       });
     }
 
@@ -308,7 +342,7 @@ export const biddingHandlers = {
 
   // Unary — initialize auction room (called by Catalog Service)
   CreateAuctionRoom: (call: any, callback: any) => {
-    const { auction_id, starting_price } = call.request;
+    const { auction_id, starting_price, duration_seconds } = call.request;
 
     if (!auction_id || !starting_price) {
       return callback({
@@ -318,7 +352,9 @@ export const biddingHandlers = {
     }
 
     try {
-      initAuction(auction_id, starting_price);
+      const duration = duration_seconds && duration_seconds > 0 ? duration_seconds : 60;
+      initAuction(auction_id, starting_price, duration);
+      startAuctionTicker(auction_id);
       console.log(`[Bidding] Created auction room: ${auction_id} with starting price Rp${starting_price.toLocaleString()}`);
       callback(null, { 
         success: true, 
@@ -343,8 +379,8 @@ export const biddingHandlers = {
       });
     }
 
-    const state = getCurrentBid(auction_id);
-    if (!state) {
+    const currentState = getCurrentBid(auction_id);
+    if (!currentState) {
       return callback({
         code: grpc.status.NOT_FOUND,
         message: `Auction ${auction_id} not found`,
@@ -352,6 +388,17 @@ export const biddingHandlers = {
     }
 
     closeAuction(auction_id);
+    const ticker = auctionTickerMap.get(auction_id);
+    if (ticker) {
+      clearInterval(ticker);
+      auctionTickerMap.delete(auction_id);
+    }
+
+    const stateAfterClose = getCurrentBid(auction_id);
+    if (stateAfterClose) {
+      broadcast(stateAfterClose, 0, 'AUCTION_CLOSED');
+    }
+
     callback(null, {
       success: true,
       message: 'Auction room closed successfully',

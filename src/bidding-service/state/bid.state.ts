@@ -5,6 +5,7 @@ import { BidState } from '../../shared/types';
 const mutexMap = new Map<string, Mutex>();
 const bidStateMap = new Map<string, BidState>();
 const auctionStatusMap = new Map<string, boolean>(); // Track auction open/closed status
+const auctionEndAtMap = new Map<string, number>();
 
 export type BidFailureReason = 'NOT_FOUND' | 'FAILED_PRECONDITION';
 
@@ -41,7 +42,8 @@ export async function placeBid(
 
   // Check if auction is open
   const isOpen = auctionStatusMap.get(auctionId);
-  if (isOpen === false) {
+  if (isOpen === false || getRemainingSeconds(auctionId) <= 0) {
+    auctionStatusMap.set(auctionId, false);
     const current = bidStateMap.get(auctionId);
     return {
       success: false,
@@ -98,7 +100,7 @@ export function getCurrentBid(auctionId: string): BidState | undefined {
   return bidStateMap.get(auctionId);
 }
 
-export function initAuction(auctionId: string, startingPrice: number): void {
+export function initAuction(auctionId: string, startingPrice: number, durationSeconds: number = 180): void {
   bidStateMap.set(auctionId, {
     auctionId,
     highestBidder: '',
@@ -106,8 +108,16 @@ export function initAuction(auctionId: string, startingPrice: number): void {
     timestamp: Date.now(),
   });
   auctionStatusMap.set(auctionId, true); // Mark as open
+  auctionEndAtMap.set(auctionId, Date.now() + durationSeconds * 1000);
 }
 
 export function closeAuction(auctionId: string): void {
   auctionStatusMap.set(auctionId, false); // Mark as closed
+}
+
+export function getRemainingSeconds(auctionId: string): number {
+  const endAt = auctionEndAtMap.get(auctionId);
+  if (!endAt) return 0;
+  const remainingMs = endAt - Date.now();
+  return Math.max(0, Math.ceil(remainingMs / 1000));
 }

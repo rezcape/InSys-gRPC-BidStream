@@ -55,7 +55,7 @@ export const catalogHandlers = {
       itemId: item_id,
       itemName: item.name,
       startingPrice: item.starting_price,
-      durationSeconds: duration_seconds || 60,
+      durationSeconds: duration_seconds || 180,
       openedAt: new Date(),
       isOpen: true,
     };
@@ -63,7 +63,11 @@ export const catalogHandlers = {
     auctionRooms.set(auctionId, room);
 
     biddingClient.CreateAuctionRoom(
-      { auction_id: auctionId, starting_price: room.startingPrice },
+      {
+        auction_id: auctionId,
+        starting_price: room.startingPrice,
+        duration_seconds: room.durationSeconds,
+      },
       (err: any) => {
         if (err) {
           console.error(`[Catalog] Failed to initialize bidding room for ${auctionId}: ${err.message}`);

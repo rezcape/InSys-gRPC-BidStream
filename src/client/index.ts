@@ -196,30 +196,44 @@ async function main() {
     if (BIDDER_NAME.toLowerCase() === 'admin' && itemsRes?.items?.length > 0) {
       const rl = createPrompt();
 
-      const selectedIndex = await new Promise<number>((resolve) => {
-        console.log('\n[Admin] Pilih item untuk dibuka:');
-        itemsRes.items.forEach((item: any, index: number) => {
-          console.log(`  ${index + 1}. ${item.name} (Rp${Number(item.starting_price).toLocaleString()})`);
+      while (true) {
+        const selectedIndex = await new Promise<number>((resolve) => {
+          console.log('\n[Admin] Pilih item untuk dibuka:');
+          itemsRes.items.forEach((item: any, index: number) => {
+            console.log(`  ${index + 1}. ${item.name} (Rp${Number(item.starting_price).toLocaleString()})`);
+          });
+          console.log('  q. keluar');
+
+          rl.question('\nMasukkan nomor item: ', (input) => {
+            const trimmed = input.trim().toLowerCase();
+            if (trimmed === 'q') {
+              resolve(-1);
+              return;
+            }
+
+            const parsed = Number(trimmed);
+            resolve(Number.isFinite(parsed) ? parsed - 1 : 0);
+          });
         });
 
-        rl.question('\nMasukkan nomor item: ', (input) => {
-          const parsed = Number(input.trim());
-          resolve(Number.isFinite(parsed) ? parsed - 1 : 0);
-        });
-      });
+        if (selectedIndex < 0) {
+          console.log('[Admin] Exit admin monitor');
+          rl.close();
+          return;
+        }
 
-      rl.close();
-      const selected = itemsRes.items[Math.max(0, Math.min(selectedIndex, itemsRes.items.length - 1))];
-      const openAuctionRes = await unary<any, any>(
-        catalogClient.OpenAuction.bind(catalogClient),
-        { item_id: selected.id, duration_seconds: 180 }
-      );
+        const selected = itemsRes.items[Math.max(0, Math.min(selectedIndex, itemsRes.items.length - 1))];
+        const openAuctionRes = await unary<any, any>(
+          catalogClient.OpenAuction.bind(catalogClient),
+          { item_id: selected.id, duration_seconds: 180 }
+        );
 
-      console.log(`\n[Catalog] Opened auction ${openAuctionRes.auction_id} for ${selected.name}`);
-      console.log(`[Catalog] Share AUCTION=${openAuctionRes.auction_id} to other bidders`);
+        console.log(`\n[Catalog] Opened auction ${openAuctionRes.auction_id} for ${selected.name}`);
+        console.log(`[Catalog] Share AUCTION=${openAuctionRes.auction_id} to other bidders`);
 
-      await monitorAuction(openAuctionRes.auction_id);
-      return;
+        await monitorAuction(openAuctionRes.auction_id);
+        console.log('\n[Admin] Sesi selesai. Kamu bisa pilih item lain.');
+      }
     }
 
     console.log('\n💡 Tip: Set AUCTION=<auction_id> env var to join a live auction');

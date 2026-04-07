@@ -59,6 +59,13 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
+function rejectStream(call: any, message: string): void {
+  call.emit('error', {
+    code: grpc.status.UNAUTHENTICATED,
+    message,
+  });
+}
+
 export const biddingHandlers = {
   // Bidirectional Streaming — jantung sistem
   LiveBidding: (call: grpc.ServerDuplexStream<any, any>) => {
@@ -70,6 +77,7 @@ export const biddingHandlers = {
       // Validate token
       if (!token) {
         console.log(`[Bidding] Rejected bid: no token provided`);
+        rejectStream(call, 'No token provided');
         return;
       }
 
@@ -78,10 +86,12 @@ export const biddingHandlers = {
         // Ensure bidder_name matches authenticated user
         if (payload.username !== bidder_name) {
           console.log(`[Bidding] Rejected bid: bidder_name mismatch (${payload.username} != ${bidder_name})`);
+          rejectStream(call, 'Token bidder_name mismatch');
           return;
         }
       } catch (err: any) {
         console.log(`[Bidding] Rejected bid: invalid token (${err.message})`);
+        rejectStream(call, `Invalid token: ${err.message}`);
         return;
       }
 
@@ -229,7 +239,7 @@ export const biddingHandlers = {
 
   // Server streaming — subscribers only receive updates for the chosen auction
   SendUpdate: (call: grpc.ServerWritableStream<any, any>) => {
-    const { auction_id } = call.request;
+    const { auction_id, token } = call.request;
 
     if (!auction_id) {
       call.emit('error', {
@@ -239,19 +249,37 @@ export const biddingHandlers = {
       return;
     }
 
-    subscribe(auction_id, call);
+    if (!token) {
+      rejectStream(call, 'No token provided');
+      return;
+    }
+
+    try {
+      verifyToken(token);
+    } catch (err: any) {
+      rejectStream(call, `Invalid token: ${err.message}`);
+      return;
+    }
 
     const current = getCurrentBid(auction_id);
-    if (current) {
-      call.write({
-        auction_id: current.auctionId,
-        highest_bidder: current.highestBidder,
-        highest_amount: current.highestAmount,
-        timestamp: current.timestamp,
-        remaining_seconds: getRemainingSeconds(auction_id),
-        event_type: 'SNAPSHOT',
+    if (!current) {
+      call.emit('error', {
+        code: grpc.status.NOT_FOUND,
+        message: `Auction ${auction_id} not found`,
       });
+      return;
     }
+
+    subscribe(auction_id, call);
+
+    call.write({
+      auction_id: current.auctionId,
+      highest_bidder: current.highestBidder,
+      highest_amount: current.highestAmount,
+      timestamp: current.timestamp,
+      remaining_seconds: getRemainingSeconds(auction_id),
+      event_type: 'SNAPSHOT',
+    });
 
     call.on('cancelled', () => {
       unsubscribe(auction_id, call);

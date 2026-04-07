@@ -36,6 +36,7 @@ message BidResponse {
 
 message SendUpdateRequest {
   string auction_id = 1;
+  string token = 2;
 }
 
 message AuctionResultRequest {

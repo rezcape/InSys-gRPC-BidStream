@@ -35,6 +35,10 @@ function createPrompt() {
   });
 }
 
+function ask(rl: readline.Interface, question: string): Promise<string> {
+  return new Promise((resolve) => rl.question(question, (input) => resolve(input)));
+}
+
 function unary<TReq, TRes>(
   fn: (req: TReq, cb: (err: any, res: TRes) => void) => void,
   req: TReq
@@ -83,11 +87,11 @@ function printBidUpdate(update: any, showTimer: boolean) {
   console.log(`\n[${eventType}] Highest: ${highestBidder} @ Rp${highestAmount.toLocaleString()}`);
 }
 
-async function monitorAuction(auctionId: string): Promise<void> {
+async function monitorAuction(auctionId: string, token: string): Promise<void> {
   console.log(`\n[Monitor] Watching auction ${auctionId}...`);
 
   await new Promise<void>((resolve, reject) => {
-    const stream = biddingClient.SendUpdate({ auction_id: auctionId });
+    const stream = biddingClient.SendUpdate({ auction_id: auctionId, token });
 
     stream.on('data', async (update: any) => {
       printBidUpdate(update, true);
@@ -117,6 +121,48 @@ async function monitorAuction(auctionId: string): Promise<void> {
 }
 
 async function bidderSession(auctionId: string, bidderName: string, token: string): Promise<void> {
+  const selectedToken = process.env.TOKEN ?? await (async () => {
+    const tokenPrompt = createPrompt();
+    const input = (await ask(tokenPrompt, '\nMasukkan token (Enter = token login otomatis): ')).trim();
+    tokenPrompt.close();
+    return input || token;
+  })();
+
+  const validateAccess = async (): Promise<void> => {
+    await new Promise<void>((resolve, reject) => {
+      const stream = biddingClient.SendUpdate({ auction_id: auctionId, token: selectedToken });
+      let validated = false;
+
+      const timer = setTimeout(() => {
+        stream.cancel();
+        reject(new Error('Sesi auction tidak tersedia atau koneksi timeout'));
+      }, 4000);
+
+      stream.on('data', () => {
+        validated = true;
+        clearTimeout(timer);
+        stream.cancel();
+        resolve();
+      });
+
+      stream.on('error', (err: any) => {
+        clearTimeout(timer);
+        if (validated && err?.code === grpc.status.CANCELLED) {
+          return;
+        }
+        reject(err);
+      });
+    });
+  };
+
+  try {
+    await validateAccess();
+  } catch (err: any) {
+    console.error(`\n[Access Denied] ${err.message}`);
+    console.log('[Access Denied] Token atau auction tidak valid. Sesi bidding ditutup.');
+    return;
+  }
+
   console.log(`\n[Bidding] Joining auction ${auctionId}...`);
   const stream = biddingClient.LiveBidding();
   const rl = createPrompt();
@@ -133,7 +179,11 @@ async function bidderSession(auctionId: string, bidderName: string, token: strin
     }
   });
 
-  stream.on('error', (err: any) => console.error('[Stream Error]', err.message));
+  stream.on('error', (err: any) => {
+    console.error('[Stream Error]', err.message);
+    auctionClosed = true;
+    rl.close();
+  });
 
   const askBid = () => {
     if (auctionClosed) return;
@@ -159,7 +209,7 @@ async function bidderSession(auctionId: string, bidderName: string, token: strin
         auction_id: auctionId,
         bidder_name: bidderName,
         amount,
-        token,
+        token: selectedToken,
       });
 
       askBid();
@@ -231,7 +281,7 @@ async function main() {
         console.log(`\n[Catalog] Opened auction ${openAuctionRes.auction_id} for ${selected.name}`);
         console.log(`[Catalog] Share AUCTION=${openAuctionRes.auction_id} to other bidders`);
 
-        await monitorAuction(openAuctionRes.auction_id);
+        await monitorAuction(openAuctionRes.auction_id, loginRes.token);
         console.log('\n[Admin] Sesi selesai. Kamu bisa pilih item lain.');
       }
     }

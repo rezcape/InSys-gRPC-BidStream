@@ -4,7 +4,7 @@
 
 | Nama | NRP |
 |------|-----|
-| Ahmad Syauqi Reza | 50272410
+| Ahmad Syauqi Reza | 5027241085
 | Muhammad Khosyi Syehab | 5027241089 |
 
 ## Arsitektur Service

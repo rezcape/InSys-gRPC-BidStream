@@ -7,6 +7,7 @@ service BiddingService {
   rpc SendUpdate(SendUpdateRequest) returns (stream BidUpdate);
   rpc PlaceBid(BidRequest) returns (BidResponse);
   rpc GetAuctionResult(AuctionResultRequest) returns (AuctionResultResponse);
+  rpc GetLeaderboard(GetLeaderboardRequest) returns (GetLeaderboardResponse);
   rpc CreateAuctionRoom(CreateAuctionRoomRequest) returns (CreateAuctionRoomResponse);
   rpc CloseAuctionRoom(CloseAuctionRoomRequest) returns (CloseAuctionRoomResponse);
 }
@@ -48,6 +49,22 @@ message AuctionResultResponse {
   string winner = 2;
   double final_price = 3;
   bool auction_closed = 4;
+}
+
+message GetLeaderboardRequest {
+  string auction_id = 1;
+  int32 limit = 2;
+}
+
+message LeaderboardEntry {
+  string bidder_name = 1;
+  double highest_bid = 2;
+  int32 rank = 3;
+}
+
+message GetLeaderboardResponse {
+  string auction_id = 1;
+  repeated LeaderboardEntry entries = 2;
 }
 
 message CreateAuctionRoomRequest {

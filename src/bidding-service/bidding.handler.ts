@@ -1,10 +1,21 @@
 import * as grpc from '@grpc/grpc-js';
-import { placeBid, getCurrentBid, initAuction, closeAuction, getRemainingSeconds } from './state/bid.state';
+import {
+  placeBid,
+  getCurrentBid,
+  initAuction,
+  closeAuction,
+  getRemainingSeconds,
+  getLeaderboard,
+  clearAuctionState,
+} from './state/bid.state';
 import { subscribe, unsubscribe, broadcast } from './state/broadcaster';
 import { verifyToken } from '../shared/utils/jwt.utils';
 
 const BID_TIMEOUT_MS = 10;
 const auctionTickerMap = new Map<string, NodeJS.Timeout>();
+const auctionGraceMap = new Map<string, boolean>();
+const GRACE_PERIOD_MS = 2000;
+const AUCTION_STATE_RETENTION_MS = 5 * 60 * 1000;
 
 function startAuctionTicker(auctionId: string): void {
   if (auctionTickerMap.has(auctionId)) {
@@ -22,10 +33,27 @@ function startAuctionTicker(auctionId: string): void {
     const remaining = getRemainingSeconds(auctionId);
 
     if (remaining <= 0) {
-      closeAuction(auctionId);
-      broadcast(state, 0, 'AUCTION_CLOSED');
-      clearInterval(ticker);
-      auctionTickerMap.delete(auctionId);
+      if (!auctionGraceMap.get(auctionId)) {
+        closeAuction(auctionId); // lock bid intake immediately
+        auctionGraceMap.set(auctionId, true);
+        broadcast(state, 0, 'AUCTION_CLOSING');
+
+        setTimeout(() => {
+          const latestState = getCurrentBid(auctionId);
+          if (latestState) {
+            broadcast(latestState, 0, 'AUCTION_CLOSED');
+          }
+
+          clearInterval(ticker);
+          auctionTickerMap.delete(auctionId);
+          auctionGraceMap.delete(auctionId);
+
+          // Keep state briefly for result/leaderboard fetch, then cleanup memory
+          setTimeout(() => {
+            clearAuctionState(auctionId);
+          }, AUCTION_STATE_RETENTION_MS);
+        }, GRACE_PERIOD_MS);
+      }
       return;
     }
 
@@ -368,6 +396,36 @@ export const biddingHandlers = {
     });
   },
 
+  // Unary — get top bidders leaderboard
+  GetLeaderboard: (call: any, callback: any) => {
+    const { auction_id, limit } = call.request;
+
+    if (!auction_id) {
+      return callback({
+        code: grpc.status.INVALID_ARGUMENT,
+        message: 'auction_id is required',
+      });
+    }
+
+    const state = getCurrentBid(auction_id);
+    if (!state) {
+      return callback({
+        code: grpc.status.NOT_FOUND,
+        message: `Auction ${auction_id} not found`,
+      });
+    }
+
+    const rows = getLeaderboard(auction_id, Number(limit) || 3);
+    callback(null, {
+      auction_id,
+      entries: rows.map((row, idx) => ({
+        bidder_name: row.bidderName,
+        highest_bid: row.highestBid,
+        rank: idx + 1,
+      })),
+    });
+  },
+
   // Unary — initialize auction room (called by Catalog Service)
   CreateAuctionRoom: (call: any, callback: any) => {
     const { auction_id, starting_price, duration_seconds } = call.request;
@@ -416,6 +474,7 @@ export const biddingHandlers = {
     }
 
     closeAuction(auction_id);
+    auctionGraceMap.delete(auction_id);
     const ticker = auctionTickerMap.get(auction_id);
     if (ticker) {
       clearInterval(ticker);

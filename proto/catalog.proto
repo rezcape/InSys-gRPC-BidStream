@@ -3,7 +3,10 @@ package catalog;
 
 service CatalogService {
   rpc GetItems(GetItemsRequest) returns (GetItemsResponse);
+  rpc AddItem(AddItemRequest) returns (AddItemResponse);
+  rpc ResetItem(ResetItemRequest) returns (ResetItemResponse);
   rpc OpenAuction(OpenAuctionRequest) returns (OpenAuctionResponse);
+  rpc GetAuctionInfo(GetAuctionInfoRequest) returns (GetAuctionInfoResponse);
   rpc MonitorAuctionFeed(MonitorRequest) returns (stream AuctionEvent);
 }
 
@@ -20,6 +23,27 @@ message GetItemsResponse {
   repeated Item items = 1;
 }
 
+message AddItemRequest {
+  string name = 1;
+  string description = 2;
+  double starting_price = 3;
+}
+
+message AddItemResponse {
+  bool success = 1;
+  string item_id = 2;
+  string message = 3;
+}
+
+message ResetItemRequest {
+  string item_id = 1;
+}
+
+message ResetItemResponse {
+  bool success = 1;
+  string message = 2;
+}
+
 message OpenAuctionRequest {
   string item_id = 1;
   int32 duration_seconds = 2;
@@ -29,6 +53,19 @@ message OpenAuctionResponse {
   bool success = 1;
   string auction_id = 2;
   string message = 3;
+}
+
+message GetAuctionInfoRequest {
+  string auction_id = 1;
+}
+
+message GetAuctionInfoResponse {
+  string auction_id = 1;
+  string item_id = 2;
+  string item_name = 3;
+  string item_description = 4;
+  double starting_price = 5;
+  bool is_open = 6;
 }
 
 message MonitorRequest {}

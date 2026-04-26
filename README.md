@@ -4,7 +4,7 @@
 
 | Nama | NRP |
 |------|-----|
-| Ahmad Syauqi Reza | 5027241085
+| Ahmad Syauqi Reza | 5027241085 |
 | Muhammad Khosyi Syehab | 5027241089 |
 
 ## Arsitektur Service
@@ -108,16 +108,3 @@ src/
   client/
   shared/
 ```
-
-## Dokumentasi Gambar (Isi Saat Final)
-
-1. [ Gambar 1 - Diagram arsitektur 3 service]
-2. [ Gambar 2 - Terminal saat service auth/catalog/bidding running]
-3. [ Gambar 3 - Admin membuka auction dan mendapatkan auction_id]
-4. [ Gambar 4 - Multi-client bidding realtime (Alice & Budi)]
-5. [ Gambar 5 - Hasil akhir GetAuctionResult]
-
-## Catatan Singkat Presentasi
-
-- Fokus tunjukkan: unary, streaming, error handling, state management, multi-client.
-- Tunjukkan satu auction end-to-end dari open -> bidding -> final result.
